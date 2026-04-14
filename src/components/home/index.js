@@ -1,0 +1,13 @@
+export { default as HomePage } from './HomePage';
+export { default as HeroSection } from './HeroSection';
+export { default as ScrollingBanner } from './ScrollingBanner';
+export { default as InnovationHub } from './InnovationHub';
+export { default as CompaniesSpotlight } from './CompaniesSpotlight';
+export { default as ProjectConsultation } from './ProjectConsultation';
+export { default as InvestmentSection } from './InvestmentSection';
+export { default as ClientsSection } from './ClientsSection';
+export { default as TestimonialsSection } from './TestimonialsSection';
+export { default as ProductsSpotlight } from './ProductSpotlight';
+export { default as CaseStudySection } from './Casestudy';
+export { default as ExperienceBlogSpot } from './ExperienceBlogSpot';
+export { default as UpcomingProjects } from './UpcomingProjects';

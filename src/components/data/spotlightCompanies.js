@@ -1,0 +1,130 @@
+// Shared dataset for Companies in Spotlight used by Home and Showcase Hub
+// Each company includes themes for both Home carousel and Showcase page
+import { Battery, Wind, Sun, Zap } from "lucide-react";
+
+export const spotlightCompanies = [
+  {
+    slug: "emerald-energy-solutions",
+    name: "Emerald Energy Solutions",
+    description: "Leading the renewable transition through solar storage and green infrastructure.",
+    category: "Green Infrastructure",
+    image: "/projects/project1.jpg",
+    location: "London, UK",
+    website: "https://www.company.com",
+    email: "hello@company.com",
+    // Home carousel theme
+    homeTheme: {
+      primary: "from-emerald-500 to-cyan-600",
+      secondary: "from-emerald-100 to-cyan-200",
+      accent: "green-500",
+      glow: "rgba(16,185,129,0.3)",
+      text: "green-900",
+    },
+    icon: Battery,
+    // Showcase theme
+    showTheme: {
+      ring: "from-emerald-400 via-teal-400 to-cyan-400",
+      text: "text-emerald-300",
+      icon: "text-emerald-300",
+      glow: "shadow-[0_0_40px_rgba(16,185,129,0.45)]",
+    },
+  },
+  {
+    slug: "solarnova-technologies",
+    name: "SolarNova Technologies",
+    description: "Innovating with AI and smart systems to accelerate sustainable energy deployment.",
+    category: "AI Energy Systems",
+    image: "/projects/project2.jpg",
+    location: "Dublin, IE",
+    website: "https://www.company.com",
+    email: "hello@company.com",
+    homeTheme: {
+      primary: "from-fuchsia-500 to-indigo-600",
+      secondary: "from-fuchsia-100 to-indigo-200",
+      accent: "purple-500",
+      glow: "rgba(217,70,239,0.3)",
+      text: "purple-900",
+    },
+    icon: Wind,
+    showTheme: {
+      ring: "from-fuchsia-400 via-violet-400 to-indigo-400",
+      text: "text-fuchsia-300",
+      icon: "text-fuchsia-300",
+      glow: "shadow-[0_0_40px_rgba(217,70,239,0.45)]",
+    },
+  },
+  {
+    slug: "solarnova-technologies",
+    name: "SolarNova Technologies",
+    description: "Innovating with AI and smart systems to accelerate sustainable energy deployment.",
+    category: "AI Energy Systems",
+    image: "/eprojects/project2.jpg",
+    location: "Dublin, IE",
+    website: "https://www.company.com",
+    email: "hello@company.com",
+    homeTheme: {
+      primary: "from-fuchsia-500 to-indigo-600",
+      secondary: "from-fuchsia-100 to-indigo-200",
+      accent: "white-500",
+      glow: "rgba(217,70,239,0.3)",
+      text: "purple-900",
+    },
+    icon: Wind,
+    showTheme: {
+      ring: "from-fuchsia-400 via-violet-400 to-indigo-400",
+      text: "text-fuchsia-300",
+      icon: "text-fuchsia-300",
+      glow: "shadow-[0_0_40px_rgba(217,70,239,0.45)]",
+    },
+  },
+  {
+    slug: "solarnova-labs",
+    name: "SolarNova Labs",
+    description: "R&D for next-gen PV materials and ultra-light modules.",
+    category: "Solar R&D",
+    image: "/projects/project3.jpg",
+    location: "Dublin, IE",
+    website: "https://www.company.com",
+    email: "hello@company.com",
+    homeTheme: {
+      primary: "from-amber-500 to-orange-600",
+      secondary: "from-amber-100 to-orange-200",
+      accent: "orange-500",
+      glow: "rgba(245,158,11,0.3)",
+      text: "orange-900",
+    },
+    icon: Sun,
+    showTheme: {
+      ring: "from-amber-400 via-orange-400 to-yellow-400",
+      text: "text-amber-200",
+      icon: "text-amber-200",
+      glow: "shadow-[0_0_40px_rgba(245,158,11,0.45)]",
+    },
+  },
+  {
+    slug: "sigenergy",
+    name: "Sigenergy",
+    description: "Next-generation home and business energy solutions with AI-powered management.",
+    category: "Energy Storage & EV Charging",
+    image: "https://images.unsplash.com/photo-1509391366360-2e959784a276?w=500&q=80",
+    location: "Global (UK, Europe, Africa, Ireland)",
+    website: "https://www.sigenergy.com",
+    email: "info@sigenergy.com",
+    homeTheme: {
+      primary: "from-cyan-500 to-blue-600",
+      secondary: "from-cyan-100 to-blue-200",
+      accent: "cyan-500",
+      glow: "rgba(34,211,238,0.3)",
+      text: "cyan-900",
+    },
+    icon: Zap,
+    showTheme: {
+      ring: "from-cyan-400 via-blue-400 to-indigo-400",
+      text: "text-cyan-300",
+      icon: "text-cyan-300",
+      glow: "shadow-[0_0_40px_rgba(34,211,238,0.45)]",
+    },
+  },
+];
+
+export default spotlightCompanies;
