@@ -122,6 +122,16 @@ export const updateUser = async (id, updates) => {
   }
 };
 
+export const findUserByStripeCustomerId = async (stripeCustomerId) => {
+  try {
+    const user = await User.findOne({ stripeCustomerId }).lean();
+    return user;
+  } catch (err) {
+    console.error("[DB] Error finding user by stripeCustomerId:", err.message);
+    return null;
+  }
+};
+
 export const getAllUsers = async () => {
   try {
     const users = await User.find().lean();

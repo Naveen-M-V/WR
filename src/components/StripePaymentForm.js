@@ -6,7 +6,7 @@ import { X, CreditCard, Lock, CheckCircle, AlertCircle, Loader } from 'lucide-re
 import { stripePromise } from '../utils/stripe';
  import { API_BASE_URL } from '../config';
 
-const PaymentForm = ({ selectedPlan, onClose, onSuccess, onError }) => {
+const PaymentForm = ({ selectedPlan, onClose, onSuccess, onError, userEmail }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [processing, setProcessing] = useState(false);
@@ -44,7 +44,7 @@ const PaymentForm = ({ selectedPlan, onClose, onSuccess, onError }) => {
         type: 'card',
         card: cardElement,
         billing_details: {
-          email: 'user@example.com', // This should come from user context
+          email: userEmail || selectedPlan?.userEmail || '',
         },
       });
 
@@ -269,7 +269,7 @@ const PaymentForm = ({ selectedPlan, onClose, onSuccess, onError }) => {
   );
 };
 
-const StripePaymentForm = ({ selectedPlan, onClose, onSuccess, onError }) => {
+const StripePaymentForm = ({ selectedPlan, onClose, onSuccess, onError, userEmail }) => {
   return (
     <Elements stripe={stripePromise}>
       <PaymentForm
@@ -277,6 +277,7 @@ const StripePaymentForm = ({ selectedPlan, onClose, onSuccess, onError }) => {
         onClose={onClose}
         onSuccess={onSuccess}
         onError={onError}
+        userEmail={userEmail}
       />
     </Elements>
   );

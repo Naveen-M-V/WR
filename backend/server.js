@@ -55,6 +55,8 @@ const startServer = async () => {
       },
       credentials: true,
     }));
+    // Stripe webhook needs raw body - must be before express.json()
+    app.use('/api/webhook', express.raw({ type: 'application/json' }));
     app.use(express.json({ limit: '20mb' }));
     app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 

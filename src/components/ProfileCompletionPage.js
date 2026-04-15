@@ -243,14 +243,14 @@ const ProfileCompletionPage = () => {
   const planTemplate = (billing) => [
     {
       name: "PROFESSIONAL", price: billing === "monthly" ? 400 : 4800, earlyBirdPrice: billing === "monthly" ? 280 : 3360,
-      duration: billing === "monthly" ? "month" : "year", priceId: billing === "monthly" ? "price_1T2r9REBRI1WE4Mpajc2ghxF" : "price_1T2r9hEBRI1WE4MpymI5cntU",
+      duration: billing === "monthly" ? "month" : "year", priceId: billing === "monthly" ? "price_1TMDGpEEQbrwR9DPbTclwQ11" : "price_1TMDGpEEQbrwR9DPbTclwQ11",
       description: "Comprehensive plan with essential features for growing companies in the renewable energy sector.",
       cta: "Continue", recommended: true,
       features: ["Company Name & Logo on WR Website","Link to your Website, Social Media & Company contact details","300-word blurb (Company overview, Key Products, Services, Case Study, Completed Projects, Awards, Testimonials, Certifications, Publication & Blogs)","Appear in 'Find A Company' search on WR Website","Get listed within WR catalogue / directory","Showcase your Service or product in 2 specific categories and upload 2 Images","Regions you are available to work in","Access to Industry-related webinars","Post up to 3 Image Allocations to designated Products & Services","Post up to 3 internal 'Job Vacancies' per month and up to 300 words"],
     },
     {
       name: "ELITE", price: billing === "monthly" ? 600 : 7200, earlyBirdPrice: billing === "monthly" ? 420 : 5040,
-      duration: billing === "monthly" ? "month" : "year", priceId: billing === "monthly" ? "price_1T2rA0EBRI1WE4MpJE7vW6cX" : "price_1T2rAIEBRI1WE4MpM85HhnlV",
+      duration: billing === "monthly" ? "month" : "year", priceId: billing === "monthly" ? "price_1TMDGpEEQbrwR9DPbTclwQ11" : "price_1TMDGpEEQbrwR9DPbTclwQ11",
       productId: billing === "monthly" ? "prod_UKnGJISjSAIWee" : null,
       description: "Premium plan with all Professional features plus enhanced visibility and exclusive benefits.",
       cta: "Continue", recommended: false,

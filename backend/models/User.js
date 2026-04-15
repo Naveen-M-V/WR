@@ -33,6 +33,14 @@ const userSchema = new mongoose.Schema({
     lastName: String,
     phone: String,
     avatar: String
+  },
+  stripeCustomerId: {
+    type: String,
+    default: null
+  },
+  subscription: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
   }
 }, {
   timestamps: true

@@ -166,6 +166,8 @@ const generateInvoicePdf = async ({
   billingCycle,
   addonNames = [],
   totalAmount,
+  planPrice,       // optional: actual plan price
+  addonPrices = [], // optional: array of prices per addon, matching addonNames order
 }) => {
   const parsedTotal = Number(totalAmount);
   const grandTotal = Number.isFinite(parsedTotal) ? parsedTotal : 0;
@@ -174,12 +176,29 @@ const generateInvoicePdf = async ({
   const invoiceDate = new Date().toLocaleDateString('en-GB');
   const invoiceNo = buildInvoiceNumber();
   const cleanAddons = Array.isArray(addonNames) ? addonNames.filter(Boolean) : [];
-  const itemNames = [
-    `${planName || 'Subscription Plan'} (${billingCycle || 'monthly'})`,
-    ...cleanAddons.map((name) => `Add-on: ${name}`),
-  ];
-  const lineItems = itemNames.length > 0 ? itemNames : ['Subscription Purchase'];
-  const rowAmount = lineItems.length > 0 ? grandTotal / lineItems.length : grandTotal;
+
+  // Build line items with individual prices when available
+  const lineItems = [];
+  const planLabel = `${planName || 'Subscription Plan'} (${billingCycle || 'monthly'})`;
+  if (planPrice != null && Number.isFinite(Number(planPrice))) {
+    lineItems.push({ name: planLabel, amount: Number(planPrice) });
+  } else if (cleanAddons.length === 0) {
+    lineItems.push({ name: planLabel, amount: grandTotal });
+  } else {
+    // No individual prices supplied — fall back to plan getting remaining after addons
+    const addonSum = addonPrices.reduce((s, p) => s + (Number.isFinite(Number(p)) ? Number(p) : 0), 0);
+    lineItems.push({ name: planLabel, amount: grandTotal - addonSum });
+  }
+
+  cleanAddons.forEach((name, idx) => {
+    const addonPrice = addonPrices[idx];
+    const amount = addonPrice != null && Number.isFinite(Number(addonPrice))
+      ? Number(addonPrice)
+      : grandTotal / (cleanAddons.length + 1); // fallback: equal split
+    lineItems.push({ name: `Add-on: ${name}`, amount });
+  });
+
+  const finalItems = lineItems.length > 0 ? lineItems : [{ name: 'Subscription Purchase', amount: grandTotal }];
 
   const pdfDoc = await PDFDocument.create();
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -295,22 +314,22 @@ const generateInvoicePdf = async ({
   let rowY = tableBottom - 20;
   const rowHeight = 52;
 
-  lineItems.slice(0, 3).forEach((itemName, idx) => {
+  finalItems.forEach((item, idx) => {
     // Alternating very light background
     if (idx % 2 === 0) {
       drawRect(margin, rowY - rowHeight + 14, pageWidth - margin * 2, rowHeight, rgb(0.97, 0.99, 0.97));
     }
 
-    const descLines = wrapText(itemName, 200, 10);
+    const descLines = wrapText(item.name, 200, 10);
     const centerY = rowY - 4;
 
-    drawText('01',             colQty,   centerY,      11, true,  dark);
-    drawText(descLines[0] || itemName, colDesc, centerY, 10, true, dark);
+    drawText('01',                    colQty,   centerY,      11, true,  dark);
+    drawText(descLines[0] || item.name, colDesc, centerY,    10, true,  dark);
     if (descLines[1]) drawText(descLines[1], colDesc, centerY - 13, 9, false, midGrey);
     if (descLines[2]) drawText(descLines[2], colDesc, centerY - 26, 9, false, midGrey);
 
-    drawText(formatGBP(rowAmount), colPrice, centerY, 10, true, dark);
-    drawText(formatGBP(rowAmount), colTotal, centerY, 10, true, dark);
+    drawText(formatGBP(item.amount), colPrice, centerY, 10, true, dark);
+    drawText(formatGBP(item.amount), colTotal, centerY, 10, true, dark);
 
     rowY -= rowHeight;
   });
@@ -1191,6 +1210,7 @@ export const sendSubscriptionPurchaseConfirmationEmail = async ({
   planName,
   billingCycle,
   addonNames = [],
+  addonPrices = [],
   totalAmount,
 }) => {
   try {
@@ -1212,6 +1232,7 @@ export const sendSubscriptionPurchaseConfirmationEmail = async ({
       planName,
       billingCycle,
       addonNames,
+      addonPrices,
       totalAmount,
     });
 

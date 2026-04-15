@@ -39,6 +39,7 @@ export const AuthProvider = ({ children }) => {
                 ...parsedUser,
                 id: data.data.id, // Ensure id is present
                 companyId: data.data.id, // Explicitly set companyId
+                email: data.data.email || parsedUser.email || '',
                 companyName: data.data.companyName,
                 website: data.data.website || data.data.companyWebsite || data.data.websiteLink || parsedUser.website || '',
                 companyWebsite: data.data.companyWebsite || data.data.websiteLink || parsedUser.companyWebsite || '',

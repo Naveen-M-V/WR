@@ -1,7 +1,7 @@
 import express from 'express';
 import Stripe from 'stripe';
 import { authenticateToken } from '../middleware/auth.js';
-import { findUserById, updateUser, findCompanyByUserId, updateCompany } from '../database/db.js';
+import { findUserById, updateUser, findCompanyByUserId, updateCompany, findUserByStripeCustomerId } from '../database/db.js';
 import { sendSubscriptionPurchaseConfirmationEmail } from '../utils/emailService.js';
 
 const router = express.Router();
@@ -68,6 +68,52 @@ const subscription = await stripe.subscriptions.create({
 });
 
 const paymentIntent = subscription.latest_invoice?.payment_intent;
+
+// Determine billing cycle and expiry from planId
+const planLower = String(planId || '').toLowerCase();
+const billingCycle = (planLower.includes('annual') || planLower.includes('yearly') || planLower.includes('year')) ? 'annual' : 'monthly';
+const expiryDays = billingCycle === 'annual' ? 365 : 30;
+const now = new Date();
+const endDate = new Date(now);
+endDate.setDate(endDate.getDate() + expiryDays);
+
+// Save subscription to user record in DB
+await updateUser(userId, {
+  subscription: {
+    id: subscription.id,
+    planId: planId || '',
+    status: subscription.status,
+    billingCycle,
+    startDate: now.toISOString(),
+    endDate: endDate.toISOString(),
+    cancel_at_period_end: false,
+    current_period_end: subscription.current_period_end,
+  },
+  stripeCustomerId: customerId,
+});
+
+// Also update company subscription if linked
+try {
+  const company = await findCompanyByUserId(userId);
+  if (company) {
+    await updateCompany(company._id, {
+      subscription: {
+        ...(company.subscription || {}),
+        plan: planId || '',
+        status: subscription.status,
+        billingCycle,
+        startDate: now.toISOString(),
+        endDate: endDate.toISOString(),
+        months: billingCycle === 'annual' ? 12 : 1,
+      },
+    });
+  }
+} catch (companyErr) {
+  console.error('Could not update company subscription:', companyErr);
+}
+
+// Email is sent by the invoice.payment_succeeded webhook once payment is confirmed
+// This avoids sending £0.00 invoices before the payment intent is completed
 
 res.json({
   subscriptionId: subscription.id,
@@ -477,6 +523,7 @@ router.post('/confirm-addon-purchase', authenticateToken, async (req, res) => {
 
     let processedAddons = [];
     let addonNames = [];
+    let addonPrices = [];
 
     // Handle multiple addons (new flow)
     if (addonIds) {
@@ -504,11 +551,13 @@ router.post('/confirm-addon-purchase', authenticateToken, async (req, res) => {
         }
       });
 
-      // Get addon names for email
+      // Get addon names and prices for email
       if (addonDetails && Array.isArray(addonDetails)) {
         addonNames = addonDetails.map(a => a.addonName);
+        addonPrices = addonDetails.map(a => a.price || 1.00);
       } else if (typeof addonIds === 'string') {
         addonNames = addonIds.split(',').map(id => `Addon ${id.trim()}`);
+        addonPrices = addonNames.map(() => 1.00);
       }
     } else {
       // Single addon (backward compatibility)
@@ -530,6 +579,7 @@ router.post('/confirm-addon-purchase', authenticateToken, async (req, res) => {
         
         processedAddons.push(addonId);
         addonNames = [addonName || addonId];
+        addonPrices = [price || 1.00];
         console.log(`✅ Addon ${addonId} confirmed for company ${company._id}`);
       }
     }
@@ -544,6 +594,7 @@ router.post('/confirm-addon-purchase', authenticateToken, async (req, res) => {
       planName: 'Add-on Purchase',
       billingCycle: 'one-time',
       addonNames: addonNames.length > 0 ? addonNames : ['Add-on'],
+      addonPrices: addonPrices.length > 0 ? addonPrices : [price || 1.00],
       totalAmount: totalAmount ?? price ?? 0,
     });
 
@@ -583,129 +634,251 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
   // Handle the event
   switch (event.type) {
-    case 'invoice.payment_succeeded':
-      const invoicePaymentSucceeded = event.data.object;
-      console.log('Invoice payment succeeded:', invoicePaymentSucceeded.id);
-      break;
+    case 'invoice.payment_succeeded': {
+      const inv = event.data.object;
+      console.log('Invoice payment succeeded:', inv.id);
+      if (inv.subscription && inv.customer) {
+        try {
+          const targetUser = await findUserByStripeCustomerId(inv.customer);
+          if (targetUser) {
+            const existingSub = targetUser.subscription || {};
 
-    case 'invoice.payment_failed':
-      const invoicePaymentFailed = event.data.object;
-      console.log('Invoice payment failed:', invoicePaymentFailed.id);
-      break;
+            // Update subscription status to active
+            await updateUser(targetUser._id || targetUser.id, {
+              subscription: { ...existingSub, id: inv.subscription, status: 'active' },
+            });
+            try {
+              const company = await findCompanyByUserId(targetUser._id || targetUser.id);
+              if (company) {
+                await updateCompany(company._id, {
+                  subscription: { ...(company.subscription || {}), status: 'active' },
+                });
+              }
+            } catch (_) {}
+            console.log('✅ Subscription ' + inv.subscription + ' marked active for user ' + (targetUser._id || targetUser.id));
 
-    case 'customer.subscription.created':
-      const subscriptionCreated = event.data.object;
-      console.log('Subscription created:', subscriptionCreated.id);
+            // Send invoice email with REAL amount from Stripe invoice
+            try {
+              const realAmount = inv.amount_paid / 100; // Stripe amount is in pence
+              const planName = existingSub.planId || existingSub.plan || 'Subscription Plan';
+              const billingCycle = existingSub.billingCycle || 'monthly';
+              await sendSubscriptionPurchaseConfirmationEmail({
+                email: targetUser.email,
+                username: targetUser.username || targetUser.email?.split('@')?.[0] || 'there',
+                planName,
+                billingCycle,
+                addonNames: [],
+                totalAmount: realAmount,
+              });
+              console.log('✅ Invoice email sent to ' + targetUser.email + ' for £' + realAmount);
+            } catch (emailErr) {
+              console.error('Failed to send invoice email on payment_succeeded:', emailErr);
+            }
+          }
+        } catch (err) {
+          console.error('Error updating subscription status on invoice.payment_succeeded:', err);
+        }
+      }
       break;
+    }
 
-    case 'customer.subscription.updated':
-      const subscriptionUpdated = event.data.object;
-      console.log('Subscription updated:', subscriptionUpdated.id);
+    case 'invoice.payment_failed': {
+      const inv = event.data.object;
+      console.log('Invoice payment failed:', inv.id);
+      // Mark subscription as past_due in DB
+      if (inv.subscription && inv.customer) {
+        try {
+          const targetUser = await findUserByStripeCustomerId(inv.customer);
+          if (targetUser) {
+            const existingSub = targetUser.subscription || {};
+            await updateUser(targetUser._id || targetUser.id, {
+              subscription: { ...existingSub, status: 'past_due' },
+            });
+            console.log(`⚠️ Subscription ${inv.subscription} marked past_due for user ${targetUser._id || targetUser.id}`);
+          }
+        } catch (err) {
+          console.error('Error updating subscription on invoice.payment_failed:', err);
+        }
+      }
       break;
+    }
 
-    case 'customer.subscription.deleted':
-      const subscriptionDeleted = event.data.object;
-      console.log('Subscription deleted:', subscriptionDeleted.id);
+    case 'customer.subscription.created': {
+      const sub = event.data.object;
+      console.log('Subscription created:', sub.id, '| status:', sub.status);
       break;
+    }
 
-    case 'checkout.session.completed':
+    case 'customer.subscription.updated': {
+      const sub = event.data.object;
+      console.log('Subscription updated:', sub.id, '| status:', sub.status);
+      // Sync status changes (e.g. trial end, cancellation reversal) back to DB
+      if (sub.customer) {
+        try {
+          const targetUser = await findUserByStripeCustomerId(sub.customer);
+          if (targetUser) {
+            const existingSub = targetUser.subscription || {};
+            await updateUser(targetUser._id || targetUser.id, {
+              subscription: {
+                ...existingSub,
+                id: sub.id,
+                status: sub.status,
+                cancel_at_period_end: sub.cancel_at_period_end,
+                current_period_end: sub.current_period_end,
+              },
+            });
+            console.log(`✅ Subscription ${sub.id} synced → status: ${sub.status}`);
+          }
+        } catch (err) {
+          console.error('Error syncing subscription update:', err);
+        }
+      }
+      break;
+    }
+
+    case 'customer.subscription.deleted': {
+      const sub = event.data.object;
+      console.log('Subscription deleted/cancelled:', sub.id);
+      if (sub.customer) {
+        try {
+          const targetUser = await findUserByStripeCustomerId(sub.customer);
+          if (targetUser) {
+            const existingSub = targetUser.subscription || {};
+            await updateUser(targetUser._id || targetUser.id, {
+              subscription: { ...existingSub, id: sub.id, status: 'cancelled' },
+            });
+            try {
+              const company = await findCompanyByUserId(targetUser._id || targetUser.id);
+              if (company) {
+                await updateCompany(company._id, {
+                  subscription: { ...(company.subscription || {}), status: 'cancelled' },
+                });
+              }
+            } catch (_) {}
+            console.log(`✅ Subscription ${sub.id} marked cancelled`);
+          }
+        } catch (err) {
+          console.error('Error updating subscription on deletion:', err);
+        }
+      }
+      break;
+    }
+
+    case 'checkout.session.completed': {
       const checkoutSession = event.data.object;
       console.log('Checkout session completed:', checkoutSession.id);
-      
-      // Handle both addon and main plan purchases
+
       if (checkoutSession.metadata && checkoutSession.metadata.userId) {
         try {
           const userId = checkoutSession.metadata.userId;
           const company = await findCompanyByUserId(userId);
-          
+
           if (company && checkoutSession.payment_status === 'paid') {
-            // Initialize subscription object if doesn't exist
-            if (!company.subscription) {
-              company.subscription = {};
-            }
-            
-            // ==================== HANDLE ADDON PURCHASE ====================
-            if (checkoutSession.metadata.addonId) {
-              const addonId = checkoutSession.metadata.addonId;
-              
-              if (!company.subscription.addons) {
-                company.subscription.addons = [];
+            if (!company.subscription) company.subscription = {};
+
+            // ── ADDON PURCHASE ──────────────────────────────────────────────
+            if (checkoutSession.metadata.addonIds) {
+              const addonIdsArray = checkoutSession.metadata.addonIds
+                .split(',').map(id => id.trim()).filter(Boolean);
+
+              if (!company.subscription.addons) company.subscription.addons = [];
+              if (!company.subscription.addonDetails) company.subscription.addonDetails = [];
+
+              for (const addonId of addonIdsArray) {
+                if (!company.subscription.addons.includes(addonId)) {
+                  company.subscription.addons.push(addonId);
+                  const now = new Date();
+                  const expiryDate = new Date(now);
+                  expiryDate.setDate(expiryDate.getDate() + 30);
+                  company.subscription.addonDetails.push({
+                    id: addonId,
+                    purchasedAt: now.toISOString(),
+                    expiryDate: expiryDate.toISOString(),
+                    status: 'active',
+                  });
+                  console.log('Addon ' + addonId + ' added to company ' + company._id + ', expires: ' + expiryDate.toISOString());
+                }
               }
-              if (!company.subscription.addonDetails) {
-                company.subscription.addonDetails = [];
+
+              await updateCompany(company._id, { subscription: company.subscription });
+
+              // Send invoice email
+              try {
+                const webhookUser = await findUserById(userId);
+                if (webhookUser) {
+                  const totalAmount = parseFloat(checkoutSession.metadata.totalAmount) ||
+                    (checkoutSession.amount_total ? checkoutSession.amount_total / 100 : 0);
+                  await sendSubscriptionPurchaseConfirmationEmail({
+                    email: webhookUser.email,
+                    username: webhookUser.username || webhookUser.email.split('@')[0] || 'there',
+                    planName: 'Add-on Purchase',
+                    billingCycle: 'one-time',
+                    addonNames: addonIdsArray.map(id => 'Addon ' + id),
+                    totalAmount,
+                  });
+                }
+              } catch (emailErr) {
+                console.error('Failed to send addon invoice email:', emailErr);
               }
-              
-              // Add addon if not already added
-              if (!company.subscription.addons.includes(addonId)) {
-                company.subscription.addons.push(addonId);
-                
-                // Calculate expiry date (30 days from now for addons)
-                const now = new Date();
-                const expiryDate = new Date(now);
-                expiryDate.setDate(expiryDate.getDate() + 30);
-                
-                company.subscription.addonDetails.push({
-                  id: addonId,
-                  purchasedAt: now.toISOString(),
-                  expiryDate: expiryDate.toISOString(),
-                  status: 'active'
-                });
-                
-                console.log(`Addon ${addonId} added to company ${company._id} (user: ${userId}), expires: ${expiryDate.toISOString()}`);
-              }
-            }
-            
-            // ==================== HANDLE MAIN PLAN PURCHASE ====================
-            else if (checkoutSession.metadata.planId || checkoutSession.metadata.planName) {
+
+            // ── MAIN PLAN PURCHASE ──────────────────────────────────────────
+            } else if (checkoutSession.metadata.planId || checkoutSession.metadata.planName) {
               const planName = checkoutSession.metadata.planName || 'premium';
               const planId = checkoutSession.metadata.planId || planName;
-              
-              // Determine billing cycle and days based on plan name
-              let billingCycle = 'monthly';
-              let expiryDays = 30;
-              
-              const planLower = String(planName).toLowerCase();
-              if (planLower.includes('annual') || planLower.includes('yearly') || planLower.includes('year')) {
-                billingCycle = 'annual';
-                expiryDays = 365;
-              } else if (planLower.includes('monthly') || planLower.includes('month')) {
-                billingCycle = 'monthly';
-                expiryDays = 30;
-              }
-              
-              // Calculate subscription dates
+              const planLower = planName.toLowerCase();
+              const billingCycle = (planLower.includes('annual') || planLower.includes('yearly') || planLower.includes('year'))
+                ? 'annual' : 'monthly';
+              const expiryDays = billingCycle === 'annual' ? 365 : 30;
+
               const now = new Date();
-              const startDate = new Date(now);
               const endDate = new Date(now);
               endDate.setDate(endDate.getDate() + expiryDays);
-              
-              // Update company subscription
+
               company.subscription = {
                 ...company.subscription,
                 plan: planId,
-                planName: planName,
+                planName,
                 status: 'active',
-                startDate: startDate.toISOString(),
+                startDate: now.toISOString(),
                 endDate: endDate.toISOString(),
-                billingCycle: billingCycle,
-                months: billingCycle === 'annual' ? 12 : 1
+                billingCycle,
+                months: billingCycle === 'annual' ? 12 : 1,
               };
-              
-              console.log(`✅ Main plan subscription updated for company ${company._id} (user: ${userId})`);
-              console.log(`   Plan: ${planName}, Billing: ${billingCycle}`);
-              console.log(`   Start: ${startDate.toISOString()}, End: ${endDate.toISOString()}`);
+
+              await updateCompany(company._id, { subscription: company.subscription });
+              console.log('Plan subscription updated for company ' + company._id + ' plan=' + planName + ' billing=' + billingCycle);
+
+              // Send invoice email
+              try {
+                const webhookUser = await findUserById(userId);
+                if (webhookUser) {
+                  let addonNamesFromMeta = [];
+                  try {
+                    const parsed = JSON.parse(checkoutSession.metadata.selectedAddons || '[]');
+                    addonNamesFromMeta = Array.isArray(parsed) ? parsed.map(a => a.name || a.id || String(a)) : [];
+                  } catch (_) {}
+                  const totalAmount = parseFloat(checkoutSession.metadata.totalAmount) ||
+                    (checkoutSession.amount_total ? checkoutSession.amount_total / 100 : 0);
+                  await sendSubscriptionPurchaseConfirmationEmail({
+                    email: webhookUser.email,
+                    username: webhookUser.username || webhookUser.email.split('@')[0] || 'there',
+                    planName,
+                    billingCycle,
+                    addonNames: addonNamesFromMeta,
+                    totalAmount,
+                  });
+                }
+              } catch (emailErr) {
+                console.error('Failed to send plan invoice email:', emailErr);
+              }
             }
-            
-            // Save updated subscription to database
-            await updateCompany(company._id, {
-              subscription: company.subscription
-            });
           }
         } catch (err) {
           console.error('Error processing checkout session:', err);
         }
       }
       break;
+    }
 
     default:
       console.log(`Unhandled event type ${event.type}`);

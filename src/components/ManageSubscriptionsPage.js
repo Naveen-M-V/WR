@@ -6,15 +6,15 @@ import { useNavigate } from 'react-router-dom';
 import ScrollingBanner from './home/ScrollingBanner';
 
 const addonServicesList = [
-  { id: "company-spotlight", name: "Company 'Under The Spotlight'", price: 300.00 },
-  { id: "product-spotlight", name: "Product or Service 'Under The Spotlight'", price: 300.00 },
-  { id: "hall-of-fame", name: "'Hall Of Fame - Industry Heroes'", price: 300.00 },
-  { id: "industry-awards", name: "Showcase your company's Award on our 'Industry Awards' page", price: 300.00 },
-  { id: "case-study-showcase", name: "Showcase your recent successful 'Case Study'", price: 300.00 },
-  { id: "completed-project-showcase", name: "Showcase your 'Recently Completed Project'", price: 300.00 },
-  { id: "innovations-showcase", name: "Showcase the latest 'Innovations'", price: 300.00 },
-  { id: "additional-recruitment", name: "Additional 6 x recruitment vacancies", price: 300.00 },
-  { id: "additional-service", name: "Additional 6 x service listings", price: 300.00 }
+  { id: "company-spotlight", name: "Company 'Under The Spotlight'", price: 1.00 },
+  { id: "product-spotlight", name: "Product or Service 'Under The Spotlight'", price: 1.00 },
+  { id: "hall-of-fame", name: "'Hall Of Fame - Industry Heroes'", price: 1.00 },
+  { id: "industry-awards", name: "Showcase your company's Award on our 'Industry Awards' page", price: 1.00 },
+  { id: "case-study-showcase", name: "Showcase your recent successful 'Case Study'", price: 1.00 },
+  { id: "completed-project-showcase", name: "Showcase your 'Recently Completed Project'", price: 1.00 },
+  { id: "innovations-showcase", name: "Showcase the latest 'Innovations'", price: 1.00 },
+  { id: "additional-recruitment", name: "Additional 6 x recruitment vacancies", price: 1.00 },
+  { id: "additional-service", name: "Additional 6 x service listings", price: 1.00 }
 ];
 
 const ManageSubscriptionsPage = () => {
